@@ -16,7 +16,11 @@ client = TestClient(app)
 
 
 def _headers() -> dict:
-    return {"Authorization": f"Bearer dev-{uuid.uuid4().hex[:12]}"}
+    headers = {"Authorization": f"Bearer dev-{uuid.uuid4().hex[:12]}"}
+    # Provisions this admin's company, exactly as the real app's AppShell
+    # does (it always calls /me) before any page that could create a test.
+    client.get("/api/v1/me", headers=headers)
+    return headers
 
 
 def _create_test(headers: dict, **overrides) -> dict:

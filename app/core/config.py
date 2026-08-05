@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     submit_grace_seconds: int = 30
     outbox_dir: str = ".dev/outbox"
 
+    # Credits a brand-new company starts with. One test creation spends one.
+    starting_credits: int = 20
+
     @model_validator(mode="after")
     def _no_fakes_in_prod(self) -> "Settings":
         if self.app_env == "prod":

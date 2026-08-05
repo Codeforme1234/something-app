@@ -6,11 +6,13 @@ tests/integration/test_tests_api.py instead."""
 import pytest
 
 from app.core.clock import now
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import ConflictError, InsufficientCreditsError, NotFoundError
 from app.llm.schemas import GeneratedMCQ
+from app.models.company import Company
+from app.models.teacher import Teacher
 from app.models.test import Difficulty, Test, TestStatus
-from app.repositories import store, tests_repo
-from app.schemas.tests import GenerateQuestionsRequest, PutQuestionsRequest, QuestionInput, UpdateTestRequest
+from app.repositories import companies_repo, store, teachers_repo, tests_repo
+from app.schemas.tests import CreateTestRequest, GenerateQuestionsRequest, PutQuestionsRequest, QuestionInput, UpdateTestRequest
 from app.services import test_service
 
 
@@ -24,6 +26,52 @@ def _test(test_status: TestStatus) -> Test:
         status=test_status,
         created_at=now(),
     )
+
+
+def _teacher(company_id: str | None) -> Teacher:
+    return Teacher(sub="dev-alice", email="a@x.com", name="Alice", company_id=company_id, created_at=now())
+
+
+def _company(credit_balance: int) -> Company:
+    return Company(company_id="COMP1", name="Alice's company", credit_balance=credit_balance, created_at=now())
+
+
+def test_create_test_spends_one_credit(monkeypatch):
+    monkeypatch.setattr(teachers_repo, "get_teacher", lambda sub: _teacher("COMP1"))
+    monkeypatch.setattr(companies_repo, "get_company", lambda cid: store.Stored(_company(5), 1))
+    spent = {}
+    monkeypatch.setattr(
+        tests_repo,
+        "create_test_and_spend_credit",
+        lambda test, company, version: spent.update(test=test, company=company, version=version) or version + 1,
+    )
+
+    result = test_service.create_test(
+        "dev-alice", CreateTestRequest(title="New", difficulty=Difficulty.easy, duration_seconds=600)
+    )
+
+    assert result.title == "New"
+    assert spent["company"].credit_balance == 4  # debited by exactly one
+    assert spent["test"].company_id == "COMP1"
+
+
+def test_create_test_with_zero_credits_raises_402(monkeypatch):
+    monkeypatch.setattr(teachers_repo, "get_teacher", lambda sub: _teacher("COMP1"))
+    monkeypatch.setattr(companies_repo, "get_company", lambda cid: store.Stored(_company(0), 1))
+
+    with pytest.raises(InsufficientCreditsError):
+        test_service.create_test(
+            "dev-alice", CreateTestRequest(title="New", difficulty=Difficulty.easy, duration_seconds=600)
+        )
+
+
+def test_create_test_without_a_company_raises_conflict(monkeypatch):
+    monkeypatch.setattr(teachers_repo, "get_teacher", lambda sub: _teacher(None))
+
+    with pytest.raises(ConflictError):
+        test_service.create_test(
+            "dev-alice", CreateTestRequest(title="New", difficulty=Difficulty.easy, duration_seconds=600)
+        )
 
 
 def test_update_draft_test_succeeds(monkeypatch):

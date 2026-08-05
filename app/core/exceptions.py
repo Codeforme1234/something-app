@@ -35,3 +35,8 @@ class BadRequestError(AppError):
 class UpstreamError(AppError):
     status_code = 502
     code = "upstream_error"
+
+
+class InsufficientCreditsError(AppError):
+    status_code = 402
+    code = "insufficient_credits"
