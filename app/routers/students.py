@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, status
 
 from app.auth.dependencies import get_current_teacher
 from app.auth.protocol import TeacherClaims
+from app.schemas.results import StudentDetail, TestAnalytics
 from app.schemas.students import AddStudentsRequest, AddStudentsResponse, PublishRequest, SessionRow
 from app.schemas.tests import TestSummary
-from app.services import student_service
+from app.services import results_service, student_service
 
 router = APIRouter(prefix="/tests", tags=["students"])
 
@@ -34,3 +35,17 @@ def publish_test(
     claims: TeacherClaims = Depends(get_current_teacher),
 ) -> TestSummary:
     return student_service.publish_test(claims.sub, test_id, payload)
+
+
+@router.get("/{test_id}/students/{session_id}", response_model=StudentDetail)
+def get_student_detail(
+    test_id: str, session_id: str, claims: TeacherClaims = Depends(get_current_teacher)
+) -> StudentDetail:
+    return results_service.get_student_detail(claims.sub, test_id, session_id)
+
+
+@router.get("/{test_id}/analytics", response_model=TestAnalytics)
+def get_analytics(
+    test_id: str, claims: TeacherClaims = Depends(get_current_teacher)
+) -> TestAnalytics:
+    return results_service.get_analytics(claims.sub, test_id)

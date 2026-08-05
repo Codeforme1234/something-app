@@ -61,16 +61,17 @@ def test_add_students_request_accepts_exactly_200():
 
 
 def test_session_row_has_no_token_field():
-    row = SessionRow.from_model(_session())
+    row = SessionRow.from_model(_session(), "invited")
     assert "link_token" not in SessionRow.model_fields
     assert "link_token" not in row.model_dump()
 
 
 def test_session_row_from_model_round_trips_visible_fields():
     session = _session(status=SessionStatus.completed, score=80)
-    row = SessionRow.from_model(session)
+    row = SessionRow.from_model(session, "completed")
     assert row.session_id == session.session_id
     assert row.student_name == session.student_name
     assert row.student_email == session.student_email
     assert row.status == SessionStatus.completed
+    assert row.effective_status == "completed"
     assert row.score == 80
