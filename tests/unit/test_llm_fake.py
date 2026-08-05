@@ -43,3 +43,17 @@ def test_fake_generator_works_with_no_network_or_key(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     questions = FakeMCQGenerator().generate("anything", 3, Difficulty.hard)
     assert len(questions) == 3
+
+
+def test_fake_generator_with_knowledge_base_still_passes_validation():
+    questions = FakeMCQGenerator().generate(
+        "cells", 4, Difficulty.medium, knowledge_base="Mitochondria produce ATP."
+    )
+    GeneratedMCQSet(questions=questions).validate_count(4)
+
+
+def test_fake_generator_acknowledges_knowledge_base_when_given():
+    with_kb = FakeMCQGenerator().generate("cells", 1, Difficulty.medium, "some notes")[0]
+    without_kb = FakeMCQGenerator().generate("cells", 1, Difficulty.medium)[0]
+    assert "uploaded material" in with_kb.stem
+    assert "uploaded material" not in without_kb.stem

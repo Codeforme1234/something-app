@@ -126,3 +126,34 @@ def test_generate_questions_count_out_of_range_rejected(count):
 @pytest.mark.parametrize("count", [1, 20])
 def test_generate_questions_count_boundary_accepted(count):
     GenerateQuestionsRequest(topic="Topic", count=count, difficulty="medium")
+
+
+def test_create_test_request_defaults_when_body_is_empty():
+    """The dashboard's "New test" button posts an empty body -- no settings
+    step at all -- so every field must have a usable default."""
+    req = CreateTestRequest()
+    assert req.title == "New test"
+    assert req.difficulty == "medium"
+    assert req.duration_seconds == 900
+
+
+def test_generate_questions_knowledge_base_defaults_to_none():
+    req = GenerateQuestionsRequest(topic="Topic", count=5, difficulty="medium")
+    assert req.knowledge_base is None
+
+
+def test_generate_questions_knowledge_base_is_stripped_and_blank_becomes_none():
+    req = GenerateQuestionsRequest(topic="Topic", count=5, difficulty="medium", knowledge_base="   ")
+    assert req.knowledge_base is None
+
+    req = GenerateQuestionsRequest(
+        topic="Topic", count=5, difficulty="medium", knowledge_base="  some notes  "
+    )
+    assert req.knowledge_base == "some notes"
+
+
+def test_generate_questions_knowledge_base_max_length_enforced():
+    with pytest.raises(ValidationError):
+        GenerateQuestionsRequest(
+            topic="Topic", count=5, difficulty="medium", knowledge_base="x" * 20_001
+        )

@@ -143,10 +143,10 @@ class _StubGenerator:
         self.questions = questions or [
             GeneratedMCQ(stem="Q1?", options=["A", "B", "C", "D"], correct_index=0)
         ]
-        self.calls: list[tuple[str, int, Difficulty]] = []
+        self.calls: list[tuple[str, int, Difficulty, str | None]] = []
 
-    def generate(self, topic, count, difficulty):
-        self.calls.append((topic, count, difficulty))
+    def generate(self, topic, count, difficulty, knowledge_base=None):
+        self.calls.append((topic, count, difficulty, knowledge_base))
         return self.questions
 
 
@@ -166,7 +166,7 @@ def test_generate_questions_delegates_to_configured_generator(monkeypatch):
         "dev-alice", "01TESTID", _generate_payload(topic="Photosynthesis", count=1)
     )
 
-    assert stub.calls == [("Photosynthesis", 1, Difficulty.medium)]
+    assert stub.calls == [("Photosynthesis", 1, Difficulty.medium, None)]
     assert [q.stem for q in result.questions] == ["Q1?"]
 
 

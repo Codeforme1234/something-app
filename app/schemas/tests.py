@@ -23,9 +23,14 @@ def _stripped_nonblank(value: str, field_name: str) -> str:
 
 
 class CreateTestRequest(BaseModel):
-    title: Annotated[str, Field(min_length=1, max_length=200)]
-    difficulty: Difficulty
-    duration_seconds: Annotated[int, Field(ge=60, le=14400)]
+    """All fields default so `POST /tests` with an empty body `{}` works --
+    the dashboard's "New test" button creates a draft with no settings step
+    at all. The teacher renames/adjusts it afterwards via PATCH from the
+    editor, which uses UpdateTestRequest below."""
+
+    title: Annotated[str, Field(min_length=1, max_length=200)] = "New test"
+    difficulty: Difficulty = Difficulty.medium
+    duration_seconds: Annotated[int, Field(ge=60, le=14400)] = 900
 
     @field_validator("title")
     @classmethod
@@ -76,11 +81,24 @@ class GenerateQuestionsRequest(BaseModel):
     topic: Annotated[str, Field(min_length=1, max_length=300)]
     count: Annotated[int, Field(ge=1, le=20)]
     difficulty: Difficulty
+    # Optional source text (e.g. from an uploaded .txt/.md file) the model
+    # should base questions on instead of general knowledge about the topic.
+    # Capped well under MAX_BODY_BYTES; extraction/truncation happens
+    # client-side, this is just a hard backstop.
+    knowledge_base: Annotated[str, Field(max_length=20_000)] | None = None
 
     @field_validator("topic")
     @classmethod
     def _strip_topic(cls, v: str) -> str:
         return _stripped_nonblank(v, "topic")
+
+    @field_validator("knowledge_base")
+    @classmethod
+    def _strip_knowledge_base(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        stripped = v.strip()
+        return stripped or None
 
 
 class GeneratedQuestion(BaseModel):

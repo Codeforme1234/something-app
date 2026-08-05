@@ -56,9 +56,25 @@ Return a corrected set of exactly {count} question(s) that fixes these \
 issues while still satisfying every requirement above."""
 
 
-def render_mcq_prompt(topic: str, count: int, difficulty) -> tuple[str, str]:
+KNOWLEDGE_BASE_ADDENDUM = """
+
+Source material -- base every question on this content specifically, not \
+on general knowledge about the topic. If the material doesn't contain \
+enough distinct facts for {count} non-overlapping questions, draw the \
+remainder from the closest general knowledge about the topic instead of \
+repeating a fact.
+---
+{knowledge_base}
+---"""
+
+
+def render_mcq_prompt(
+    topic: str, count: int, difficulty, knowledge_base: str | None = None
+) -> tuple[str, str]:
     """Render (system_prompt, user_prompt) for a fresh MCQ generation call."""
     user_prompt = USER_TEMPLATE.format(count=count, difficulty=difficulty.value, topic=topic)
+    if knowledge_base:
+        user_prompt += KNOWLEDGE_BASE_ADDENDUM.format(count=count, knowledge_base=knowledge_base)
     return SYSTEM_PROMPT, user_prompt
 
 

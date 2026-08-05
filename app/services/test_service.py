@@ -126,7 +126,9 @@ def generate_questions(
     stored = _get_owned_test(teacher_sub, test_id)
     _require_draft(stored.model)
 
-    generated = get_mcq_generator().generate(payload.topic, payload.count, payload.difficulty)
+    generated = get_mcq_generator().generate(
+        payload.topic, payload.count, payload.difficulty, payload.knowledge_base
+    )
 
     return GenerateQuestionsResponse(
         questions=[

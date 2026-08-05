@@ -34,8 +34,14 @@ class OpenAIMCQGenerator:
         self._client = client if client is not None else get_openai_client()
         self._model = model or settings.openai_model
 
-    def generate(self, topic: str, count: int, difficulty: Difficulty) -> list[GeneratedMCQ]:
-        system_prompt, user_prompt = render_mcq_prompt(topic, count, difficulty)
+    def generate(
+        self,
+        topic: str,
+        count: int,
+        difficulty: Difficulty,
+        knowledge_base: str | None = None,
+    ) -> list[GeneratedMCQ]:
+        system_prompt, user_prompt = render_mcq_prompt(topic, count, difficulty, knowledge_base)
 
         try:
             return self._attempt(system_prompt, user_prompt, count)

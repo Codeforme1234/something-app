@@ -104,3 +104,26 @@ def test_generate_questions_for_missing_test_is_not_found():
     headers = _headers()
     resp = _generate(headers, "does-not-exist")
     assert resp.status_code == 404, resp.text
+
+
+def test_generate_questions_with_knowledge_base_reaches_the_generator():
+    headers = _headers()
+    test_id = _create_test(headers)["test_id"]
+
+    resp = _generate(
+        headers,
+        test_id,
+        count=2,
+        knowledge_base="Mitochondria are the powerhouse of the cell.",
+    )
+    assert resp.status_code == 200, resp.text
+    for q in resp.json()["questions"]:
+        assert "uploaded material" in q["stem"]  # FakeMCQGenerator's tell
+
+
+def test_generate_questions_knowledge_base_too_long_is_rejected():
+    headers = _headers()
+    test_id = _create_test(headers)["test_id"]
+
+    resp = _generate(headers, test_id, knowledge_base="x" * 20_001)
+    assert resp.status_code == 422, resp.text

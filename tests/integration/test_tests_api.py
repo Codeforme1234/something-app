@@ -31,6 +31,18 @@ def _create_test(headers: dict, **overrides) -> dict:
     return resp.json()
 
 
+def test_create_test_with_empty_body_uses_defaults():
+    """The dashboard's "New test" button posts {} -- no settings step."""
+    headers = _headers()
+    resp = client.post("/api/v1/tests", json={}, headers=headers)
+    assert resp.status_code == 201, resp.text
+    created = resp.json()
+    assert created["title"] == "New test"
+    assert created["difficulty"] == "medium"
+    assert created["duration_seconds"] == 900
+    assert created["status"] == "draft"
+
+
 def _questions_payload(n: int) -> dict:
     return {
         "questions": [
