@@ -1,3 +1,5 @@
+# Dev-only: DynamoDB Local + a browser UI for it. Real deployments talk to
+# actual AWS (see docs/aws-setup.md) and never run this file.
 services:
   dynamodb-local:
     image: amazon/dynamodb-local:latest
