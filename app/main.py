@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
 from app.core.exceptions import AppError
-from app.routers import me, students, take, tests
+from app.routers import me, students, support, take, tests
 
 logging.basicConfig(level=logging.INFO)
 
@@ -49,6 +49,7 @@ def create_app() -> FastAPI:
     app.include_router(tests.router, prefix="/api/v1")
     app.include_router(students.router, prefix="/api/v1")
     app.include_router(take.router, prefix="/api/v1")
+    app.include_router(support.router, prefix="/api/v1")
 
     if settings.app_env == "dev":
         from app.routers import dev

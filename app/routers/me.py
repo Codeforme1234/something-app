@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
@@ -13,6 +15,11 @@ class MeResponse(BaseModel):
     sub: str
     email: str
     name: str
+    # Every authenticated caller is the sole admin of their own company (see
+    # CLAUDE.md rule 8) -- a real, if currently single-valued, role. Sourced
+    # from the backend rather than hardcoded client-side so a future actual
+    # roles system has one place to change.
+    role: Literal["admin"] = "admin"
     company_name: str
     credit_balance: int
 
