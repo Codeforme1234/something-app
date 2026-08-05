@@ -8,11 +8,15 @@ questions are replaced so the dashboard list needs no extra query.
 from app.core.clock import now
 from app.core.exceptions import ConflictError, NotFoundError
 from app.core.ids import new_ulid
+from app.llm import get_mcq_generator
 from app.models.question import Question
 from app.models.test import Test, TestStatus
 from app.repositories import store, tests_repo
 from app.schemas.tests import (
     CreateTestRequest,
+    GenerateQuestionsRequest,
+    GenerateQuestionsResponse,
+    GeneratedQuestion,
     PutQuestionsRequest,
     TestDetail,
     TestSummary,
@@ -90,3 +94,23 @@ def replace_questions(teacher_sub: str, test_id: str, payload: PutQuestionsReque
     tests_repo.update_test(teacher_sub, updated_test, stored.version)
 
     return TestDetail.from_models(updated_test, questions)
+
+
+def generate_questions(
+    teacher_sub: str, test_id: str, payload: GenerateQuestionsRequest
+) -> GenerateQuestionsResponse:
+    """Draft-only, like every other mutation guard in this module -- but this
+    one writes nothing at all. The generated questions are handed back for
+    the teacher to review/edit in the question editor and save via the
+    ordinary PUT /questions path."""
+    stored = _get_owned_test(teacher_sub, test_id)
+    _require_draft(stored.model)
+
+    generated = get_mcq_generator().generate(payload.topic, payload.count, payload.difficulty)
+
+    return GenerateQuestionsResponse(
+        questions=[
+            GeneratedQuestion(stem=q.stem, options=q.options, correct_index=q.correct_index)
+            for q in generated
+        ]
+    )

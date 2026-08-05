@@ -72,6 +72,31 @@ class PutQuestionsRequest(BaseModel):
     questions: Annotated[list[QuestionInput], Field(max_length=100)]
 
 
+class GenerateQuestionsRequest(BaseModel):
+    topic: Annotated[str, Field(min_length=1, max_length=300)]
+    count: Annotated[int, Field(ge=1, le=20)]
+    difficulty: Difficulty
+
+    @field_validator("topic")
+    @classmethod
+    def _strip_topic(cls, v: str) -> str:
+        return _stripped_nonblank(v, "topic")
+
+
+class GeneratedQuestion(BaseModel):
+    """Same shape as QuestionInput, renamed because nothing is persisted by
+    generation -- there is no question_id yet, only a draft for the teacher
+    to review in the question editor before saving."""
+
+    stem: str
+    options: list[str]
+    correct_index: int
+
+
+class GenerateQuestionsResponse(BaseModel):
+    questions: list[GeneratedQuestion]
+
+
 class TestSummary(BaseModel):
     test_id: str
     title: str
