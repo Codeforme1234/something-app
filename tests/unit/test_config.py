@@ -46,3 +46,28 @@ def test_dev_defaults_are_all_mocks():
         "outbox",
         "fake",
     )
+
+
+def test_prod_accepts_a_fully_real_config():
+    """The exact combination docs/aws-setup.md tells an operator to flip to:
+    cognito + ses + openai, no local Dynamo endpoint. Settings must accept
+    this without raising -- this is the config the "flip the switches"
+    section of that doc promises works."""
+    settings = Settings(
+        app_env="prod",
+        frontend_origin="https://app.example.com",
+        auth_mode="cognito",
+        cognito_user_pool_id="us-east-1_Pool123",
+        cognito_client_id="client-abc",
+        cognito_region="us-east-1",
+        email_mode="ses",
+        ses_from_address="noreply@quizdeck.example.com",
+        llm_mode="openai",
+        openai_api_key="sk-live-test",
+        dynamo_endpoint_url=None,
+        aws_access_key_id=None,
+        aws_secret_access_key=None,
+        _env_file=None,
+    )
+    assert settings.app_env == "prod"
+    assert settings.dynamo_endpoint_url is None

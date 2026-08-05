@@ -65,3 +65,20 @@ See [CLAUDE.md](CLAUDE.md) for the conventions this codebase follows.
 ```bash
 poetry run pytest -q
 ```
+
+## Seeding dev data
+
+```bash
+poetry run python scripts/seed.py
+```
+
+Idempotent — creates (or reuses) a demo teacher, one published 3-question
+test, two invited students, and one completed attempt, then prints the
+dashboard URL, the outbox directory, and each student's `/t/<token>` link.
+Refuses to run unless `APP_ENV=dev`.
+
+## Going to real AWS
+
+Everything above runs on mocks. See [docs/aws-setup.md](docs/aws-setup.md)
+for standing up DynamoDB, Cognito (Google sign-in), and SES, and for the
+exact env vars that flip each mode switch to real.
