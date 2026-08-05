@@ -22,6 +22,7 @@ from app.schemas.students import (
     SessionRow,
 )
 from app.schemas.tests import TestSummary
+from app.services import results_service
 from app.services.email.invitations import send_invitation
 
 logger = logging.getLogger(__name__)
@@ -84,6 +85,7 @@ def add_students(teacher_sub: str, test_id: str, payload: AddStudentsRequest) ->
             )
         )
 
+    added_rows: list[SessionRow] = []
     if new_sessions:
         sessions_repo.create_sessions(new_sessions, teacher_sub)
 
@@ -94,15 +96,25 @@ def add_students(teacher_sub: str, test_id: str, payload: AddStudentsRequest) ->
         if test.status == TestStatus.published:
             _send_invitations(updated_test, new_sessions)
 
+        added_rows = [
+            SessionRow.from_model(s, results_service.effective_status(s, updated_test, timestamp))
+            for s in new_sessions
+        ]
+
     return AddStudentsResponse(
-        added=[SessionRow.from_model(s) for s in new_sessions],
+        added=added_rows,
         skipped_emails=skipped_emails,
     )
 
 
 def list_students(teacher_sub: str, test_id: str) -> list[SessionRow]:
-    _get_owned_test(teacher_sub, test_id)
-    return [SessionRow.from_model(s) for s in sessions_repo.list_sessions(test_id)]
+    stored = _get_owned_test(teacher_sub, test_id)
+    test = stored.model
+    at = now()
+    return [
+        SessionRow.from_model(s, results_service.effective_status(s, test, at))
+        for s in sessions_repo.list_sessions(test_id)
+    ]
 
 
 def publish_test(teacher_sub: str, test_id: str, payload: PublishRequest) -> TestSummary:

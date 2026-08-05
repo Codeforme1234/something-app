@@ -38,24 +38,34 @@ class AddStudentsRequest(BaseModel):
 
 class SessionRow(BaseModel):
     """A teacher-facing view of a session. Never include `link_token` here --
-    that would leak a working student link to anyone who can read the roster."""
+    that would leak a working student link to anyone who can read the roster.
+
+    `status` is the stored value (`invited | started | completed`);
+    `effective_status` additionally accounts for server time (e.g. an
+    invited link past the test deadline, or a started session whose time
+    ran out with nothing submitted) -- see
+    app.services.results_service.effective_status. UI badges should use
+    `effective_status`.
+    """
 
     session_id: str
     student_name: str
     student_email: str
     status: SessionStatus
+    effective_status: str
     invited_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
     score: int | None
 
     @classmethod
-    def from_model(cls, session: StudentSession) -> "SessionRow":
+    def from_model(cls, session: StudentSession, effective_status: str) -> "SessionRow":
         return cls(
             session_id=session.session_id,
             student_name=session.student_name,
             student_email=session.student_email,
             status=session.status,
+            effective_status=effective_status,
             invited_at=session.invited_at,
             started_at=session.started_at,
             completed_at=session.completed_at,
