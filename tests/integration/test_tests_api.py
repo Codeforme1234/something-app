@@ -138,6 +138,37 @@ def test_put_questions_renumbers_order_from_one_on_replace():
     assert len(get_resp.json()["questions"]) == 2
 
 
+def test_question_stem_is_sanitized_end_to_end():
+    """A client that bypasses the editor and posts raw HTML must still come
+    out clean -- the rich text editor's own behavior isn't a trust boundary."""
+    headers = _headers()
+    test_id = _create_test(headers)["test_id"]
+
+    resp = client.put(
+        f"/api/v1/tests/{test_id}/questions",
+        json={
+            "questions": [
+                {
+                    "stem": '<p onclick="evil()">Which is <strong>correct</strong>?'
+                    "<script>alert(1)</script></p>",
+                    "options": ["a", "b", "c", "d"],
+                    "correct_index": 0,
+                }
+            ]
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    stem = resp.json()["questions"][0]["stem"]
+    assert "<script>" not in stem
+    assert "onclick" not in stem
+    assert "<strong>correct</strong>" in stem  # allowed formatting survives
+
+    # And it comes back the same way on a plain GET, not just the PUT response.
+    get_resp = client.get(f"/api/v1/tests/{test_id}", headers=headers)
+    assert get_resp.json()["questions"][0]["stem"] == stem
+
+
 def test_draft_only_mutation_rules():
     headers = _headers()
     created = _create_test(headers)

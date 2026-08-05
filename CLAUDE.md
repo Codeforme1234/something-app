@@ -47,6 +47,13 @@ transaction, same shape as `submissions_repo.create_submission_and_complete_sess
 Test/company ownership is still enforced by key (rule 3) — `company_id` on a
 `Test` is denormalized for reporting only, never for access control.
 
+**9. Question stems are rich text, sanitized server-side.** The stem is a
+Tiptap-produced HTML fragment (bold/italic/underline/lists only), not plain
+text. Always validate it through `app.core.rich_text.sanitize_rich_text` —
+never accept a stem without it, since the stored value is later rendered
+with `dangerouslySetInnerHTML` on the student take page and the teacher's
+review page. Length limits apply to the *visible* text, not the raw HTML.
+
 ## Layout
 
 ```

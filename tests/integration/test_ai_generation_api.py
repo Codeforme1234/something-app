@@ -127,3 +127,71 @@ def test_generate_questions_knowledge_base_too_long_is_rejected():
 
     resp = _generate(headers, test_id, knowledge_base="x" * 20_001)
     assert resp.status_code == 422, resp.text
+
+
+# --- POST /tests/generate: the "Generate with AI" workflow -----------------
+
+
+def _generate_test(headers: dict, **overrides) -> httpx.Response:
+    payload = {"topic": "Photosynthesis", "count": 3, "difficulty": "medium"}
+    payload.update(overrides)
+    return client.post("/api/v1/tests/generate", json=payload, headers=headers)
+
+
+def test_generate_test_creates_a_draft_with_ai_authored_questions():
+    headers = _headers()
+    before = client.get("/api/v1/me", headers=headers).json()["credit_balance"]
+
+    resp = _generate_test(headers, topic="Photosynthesis", count=3, difficulty="medium")
+    assert resp.status_code == 201, resp.text
+    test = resp.json()
+
+    assert test["title"] == "Photosynthesis"
+    assert test["status"] == "draft"
+    assert test["question_count"] == 3
+    assert len(test["questions"]) == 3
+    for q in test["questions"]:
+        assert "photosynthesis" in q["stem"].lower()
+        assert "correct_index" in q  # teacher-facing detail, unlike the student view
+
+    after = client.get("/api/v1/me", headers=headers).json()["credit_balance"]
+    assert after == before - 1
+
+    # It's a normal draft afterwards -- reachable through the ordinary get/list.
+    get_resp = client.get(f"/api/v1/tests/{test['test_id']}", headers=headers)
+    assert get_resp.status_code == 200, get_resp.text
+    assert get_resp.json()["question_count"] == 3
+
+
+def test_generate_test_with_knowledge_base_reaches_the_generator():
+    headers = _headers()
+    resp = _generate_test(
+        headers, count=1, knowledge_base="Mitochondria are the powerhouse of the cell."
+    )
+    assert resp.status_code == 201, resp.text
+    assert "uploaded material" in resp.json()["questions"][0]["stem"]
+
+
+def test_generate_test_with_zero_credits_is_rejected_and_creates_nothing():
+    headers = _headers()
+    for _ in range(20):
+        assert client.post("/api/v1/tests", json={}, headers=headers).status_code == 201
+    assert client.get("/api/v1/me", headers=headers).json()["credit_balance"] == 0
+
+    resp = _generate_test(headers)
+    assert resp.status_code == 402, resp.text
+
+    # Nothing new was created, and the balance stayed at zero (not negative).
+    assert client.get("/api/v1/me", headers=headers).json()["credit_balance"] == 0
+    tests_after = client.get("/api/v1/tests", headers=headers).json()
+    assert all(t["title"] != "Photosynthesis" for t in tests_after)
+
+
+def test_generate_test_topic_over_200_chars_is_truncated_for_the_title():
+    headers = _headers()
+    long_topic = "Ancient Roman Aqueducts and Their Engineering " * 5  # well over 200 chars
+    assert len(long_topic) > 200
+
+    resp = _generate_test(headers, topic=long_topic, count=1)
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["title"] == long_topic[:200]

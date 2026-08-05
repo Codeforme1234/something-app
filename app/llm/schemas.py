@@ -13,6 +13,8 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.rich_text import sanitize_rich_text
+
 
 class GeneratedMCQWire(BaseModel):
     """The shape sent to OpenAI as the structured-output schema. Deliberately
@@ -32,17 +34,18 @@ class GeneratedMCQSetWire(BaseModel):
 
 
 class GeneratedMCQ(BaseModel):
+    # The LLM produces plain text (see app/llm/prompts/), which passes
+    # through sanitize_rich_text unchanged (there are no tags to strip) --
+    # this is the same validator QuestionInput.stem uses, so generated and
+    # manually-authored stems are held to one identical rule.
     stem: Annotated[str, Field(min_length=1, max_length=1000)]
     options: Annotated[list[str], Field(min_length=4, max_length=4)]
     correct_index: Annotated[int, Field(ge=0, le=3)]
 
     @field_validator("stem")
     @classmethod
-    def _strip_stem(cls, v: str) -> str:
-        stripped = v.strip()
-        if not stripped:
-            raise ValueError("stem must not be blank")
-        return stripped
+    def _sanitize_stem(cls, v: str) -> str:
+        return sanitize_rich_text(v, "stem", max_visible_chars=1000)
 
     @field_validator("options")
     @classmethod

@@ -11,6 +11,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.rich_text import sanitize_rich_text
 from app.models.question import Question
 from app.models.test import Difficulty, Test, TestStatus
 
@@ -50,14 +51,19 @@ class UpdateTestRequest(BaseModel):
 
 
 class QuestionInput(BaseModel):
-    stem: Annotated[str, Field(min_length=1, max_length=1000)]
+    # The stem is rich text (a Tiptap-produced HTML fragment), not plain
+    # text -- max_length here is a raw-size backstop against pathological
+    # markup bloat; the real "1-1000 characters" rule is enforced against
+    # the VISIBLE text by sanitize_rich_text, which also strips the HTML
+    # down to the small allowed tag set before it's ever stored.
+    stem: Annotated[str, Field(min_length=1, max_length=6000)]
     options: Annotated[list[str], Field(min_length=4, max_length=4)]
     correct_index: Annotated[int, Field(ge=0, le=3)]
 
     @field_validator("stem")
     @classmethod
-    def _strip_stem(cls, v: str) -> str:
-        return _stripped_nonblank(v, "stem")
+    def _sanitize_stem(cls, v: str) -> str:
+        return sanitize_rich_text(v, "stem", max_visible_chars=1000)
 
     @field_validator("options")
     @classmethod
@@ -144,7 +150,7 @@ class TestSummary(BaseModel):
 class QuestionOut(BaseModel):
     question_id: str
     order: int
-    stem: str
+    stem: str  # sanitized HTML fragment (see QuestionInput) -- render, don't escape
     options: list[str]
     correct_index: int
 

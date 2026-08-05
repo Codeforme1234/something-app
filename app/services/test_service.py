@@ -9,6 +9,7 @@ from app.core.clock import now
 from app.core.exceptions import ConflictError, InsufficientCreditsError, NotFoundError
 from app.core.ids import new_ulid
 from app.llm import get_mcq_generator
+from app.models.company import Company
 from app.models.question import Question
 from app.models.test import Test, TestStatus
 from app.repositories import companies_repo, store, teachers_repo, tests_repo
@@ -36,27 +37,35 @@ def _require_draft(test: Test) -> None:
         raise ConflictError("test is no longer a draft")
 
 
-def create_test(teacher_sub: str, payload: CreateTestRequest) -> TestSummary:
-    """Creating a test spends one credit from the admin's company, atomically
-    with the test itself (app.repositories.tests_repo.create_test_and_spend_credit)
-    -- a crash or a losing race on the company's version can never produce a
-    free test or a spent credit with no test to show for it."""
+def _get_teacher_and_company(teacher_sub: str) -> tuple[str, store.Stored[Company]]:
+    """Resolve the caller's company, checked fresh -- shared by every path
+    that's about to spend a credit, so a re-check right before committing
+    always sees the current balance rather than a stale one."""
     teacher = teachers_repo.get_teacher(teacher_sub)
     if teacher is None or not teacher.company_id:
         # Unreachable in practice: GET /me provisions the company on every
-        # login, before a teacher can ever reach the "create test" button.
+        # login, before a teacher can ever reach a credit-spending action.
         raise ConflictError("admin has no company assigned yet")
 
     company_stored = companies_repo.get_company(teacher.company_id)
     if company_stored is None:
         raise NotFoundError("company not found")
+    return teacher.company_id, company_stored
+
+
+def create_test(teacher_sub: str, payload: CreateTestRequest) -> TestSummary:
+    """Creating a test spends one credit from the admin's company, atomically
+    with the test itself (app.repositories.tests_repo.create_test_and_spend_credit)
+    -- a crash or a losing race on the company's version can never produce a
+    free test or a spent credit with no test to show for it."""
+    company_id, company_stored = _get_teacher_and_company(teacher_sub)
     if company_stored.model.credit_balance < 1:
         raise InsufficientCreditsError("not enough credits to create a test")
 
     test = Test(
         test_id=new_ulid(),
         teacher_sub=teacher_sub,
-        company_id=teacher.company_id,
+        company_id=company_id,
         title=payload.title,
         difficulty=payload.difficulty,
         duration_seconds=payload.duration_seconds,
@@ -68,6 +77,53 @@ def create_test(teacher_sub: str, payload: CreateTestRequest) -> TestSummary:
     )
     tests_repo.create_test_and_spend_credit(test, debited_company, company_stored.version)
     return TestSummary.from_model(test)
+
+
+def generate_test(teacher_sub: str, payload: GenerateQuestionsRequest) -> TestDetail:
+    """The "Generate with AI" workflow: one credit buys a finished draft, not
+    an empty one. Credits are checked before AND after the (possibly slow)
+    LLM call -- once up front so a request that can't succeed never reaches
+    the model at all, and once more right before committing so a balance
+    that changed *during* generation is still caught. A generation failure
+    (UpstreamError) always happens before anything is created or spent.
+    """
+    company_id, company_stored = _get_teacher_and_company(teacher_sub)
+    if company_stored.model.credit_balance < 1:
+        raise InsufficientCreditsError("not enough credits to generate a test")
+
+    generated = get_mcq_generator().generate(
+        payload.topic, payload.count, payload.difficulty, payload.knowledge_base
+    )
+
+    _, fresh_company_stored = _get_teacher_and_company(teacher_sub)
+    if fresh_company_stored.model.credit_balance < 1:
+        raise InsufficientCreditsError("not enough credits to generate a test")
+
+    questions = [
+        Question(question_id=new_ulid(), order=order, stem=q.stem, options=q.options, correct_index=q.correct_index)
+        for order, q in enumerate(generated, start=1)
+    ]
+    # question_count is known already (generation already ran) -- set it at
+    # construction time so there's no separate update-after-create step, and
+    # so no second write could be misapplied against the wrong item's version.
+    test = Test(
+        test_id=new_ulid(),
+        teacher_sub=teacher_sub,
+        company_id=company_id,
+        title=payload.topic[:200],
+        difficulty=payload.difficulty,
+        duration_seconds=900,
+        status=TestStatus.draft,
+        question_count=len(questions),
+        created_at=now(),
+    )
+    debited_company = fresh_company_stored.model.model_copy(
+        update={"credit_balance": fresh_company_stored.model.credit_balance - 1}
+    )
+    tests_repo.create_test_and_spend_credit(test, debited_company, fresh_company_stored.version)
+    tests_repo.replace_questions(test.test_id, questions)
+
+    return TestDetail.from_models(test, questions)
 
 
 def list_tests(teacher_sub: str) -> list[TestSummary]:

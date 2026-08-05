@@ -81,6 +81,22 @@ def test_question_stem_must_be_nonblank_after_strip():
         QuestionInput(stem="   ", options=_options(), correct_index=0)
 
 
+def test_question_stem_keeps_allowed_rich_text_formatting():
+    req = QuestionInput(
+        stem="<p>Which is <strong>correct</strong>?</p>", options=_options(), correct_index=0
+    )
+    assert req.stem == "<p>Which is <strong>correct</strong>?</p>"
+
+
+def test_question_stem_strips_disallowed_tags_and_attributes():
+    req = QuestionInput(
+        stem='<p onclick="evil()">Q<script>alert(1)</script>?</p>', options=_options(), correct_index=0
+    )
+    assert "<script>" not in req.stem
+    assert "onclick" not in req.stem
+    assert "Q" in req.stem
+
+
 @pytest.mark.parametrize("index", [-1, 4])
 def test_question_correct_index_out_of_range_rejected(index):
     with pytest.raises(ValidationError):

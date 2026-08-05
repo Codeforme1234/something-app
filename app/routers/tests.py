@@ -23,6 +23,16 @@ def create_test(
     return test_service.create_test(claims.sub, payload)
 
 
+@router.post("/generate", response_model=TestDetail, status_code=status.HTTP_201_CREATED)
+def generate_test(
+    payload: GenerateQuestionsRequest, claims: TeacherClaims = Depends(get_current_teacher)
+) -> TestDetail:
+    """The "Generate with AI" workflow: creates a new draft AND its questions
+    in one call, unlike POST /{test_id}/generate-questions which only drafts
+    questions into a test that already exists."""
+    return test_service.generate_test(claims.sub, payload)
+
+
 @router.get("", response_model=list[TestSummary])
 def list_tests(claims: TeacherClaims = Depends(get_current_teacher)) -> list[TestSummary]:
     return test_service.list_tests(claims.sub)

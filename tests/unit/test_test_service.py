@@ -199,3 +199,114 @@ def test_generate_questions_does_not_write_anything(monkeypatch):
     monkeypatch.setattr(tests_repo, "update_test", _fail)
 
     test_service.generate_questions("dev-alice", "01TESTID", _generate_payload())
+
+
+# --- generate_test: the "Generate with AI" workflow (creates the test too) --
+
+
+def _patch_generate_test_repo(monkeypatch, *, company_balance: int, generator, questions_written=None):
+    monkeypatch.setattr(teachers_repo, "get_teacher", lambda sub: _teacher("COMP1"))
+    monkeypatch.setattr(companies_repo, "get_company", lambda cid: store.Stored(_company(company_balance), 1))
+    monkeypatch.setattr(test_service, "get_mcq_generator", lambda: generator)
+
+    created = {}
+
+    def _create(test, company, version):
+        created["test"] = test
+        created["company"] = company
+        return version + 1
+
+    def _replace_questions(test_id, questions):
+        if questions_written is not None:
+            questions_written.append(questions)
+
+    monkeypatch.setattr(tests_repo, "create_test_and_spend_credit", _create)
+    monkeypatch.setattr(tests_repo, "replace_questions", _replace_questions)
+    monkeypatch.setattr(tests_repo, "update_test", lambda sub, test, version: version + 1)
+    return created
+
+
+def test_generate_test_creates_test_and_questions_and_spends_one_credit(monkeypatch):
+    written = []
+    created = _patch_generate_test_repo(
+        monkeypatch, company_balance=5, generator=_StubGenerator(), questions_written=written
+    )
+
+    result = test_service.generate_test("dev-alice", _generate_payload(topic="Photosynthesis"))
+
+    assert result.title == "Photosynthesis"
+    assert result.question_count == 1
+    assert [q.stem for q in result.questions] == ["Q1?"]
+    assert created["company"].credit_balance == 4  # debited by exactly one
+    assert len(written) == 1
+    assert len(written[0]) == 1
+
+
+def test_generate_test_title_is_truncated_to_200_chars(monkeypatch):
+    _patch_generate_test_repo(monkeypatch, company_balance=5, generator=_StubGenerator())
+
+    long_topic = "x" * 300
+    result = test_service.generate_test("dev-alice", _generate_payload(topic=long_topic))
+
+    assert result.title == long_topic[:200]
+
+
+def test_generate_test_with_zero_credits_never_calls_the_generator(monkeypatch):
+    monkeypatch.setattr(teachers_repo, "get_teacher", lambda sub: _teacher("COMP1"))
+    monkeypatch.setattr(companies_repo, "get_company", lambda cid: store.Stored(_company(0), 1))
+
+    def _fail(*args, **kwargs):
+        raise AssertionError("must not call the LLM when there are no credits")
+
+    stub = _StubGenerator()
+    stub.generate = _fail
+    monkeypatch.setattr(test_service, "get_mcq_generator", lambda: stub)
+
+    with pytest.raises(InsufficientCreditsError):
+        test_service.generate_test("dev-alice", _generate_payload())
+
+
+def test_generate_test_generation_failure_creates_nothing(monkeypatch):
+    monkeypatch.setattr(teachers_repo, "get_teacher", lambda sub: _teacher("COMP1"))
+    monkeypatch.setattr(companies_repo, "get_company", lambda cid: store.Stored(_company(5), 1))
+
+    class _FailingGenerator:
+        def generate(self, *args, **kwargs):
+            raise RuntimeError("upstream boom")
+
+    monkeypatch.setattr(test_service, "get_mcq_generator", lambda: _FailingGenerator())
+
+    def _fail(*args, **kwargs):
+        raise AssertionError("must not create a test when generation fails")
+
+    monkeypatch.setattr(tests_repo, "create_test_and_spend_credit", _fail)
+
+    with pytest.raises(RuntimeError):
+        test_service.generate_test("dev-alice", _generate_payload())
+
+
+def test_generate_test_rechecks_credits_after_generation(monkeypatch):
+    """Covers the race where the balance drops to zero *during* the (slow)
+    LLM call -- the pre-check alone isn't enough."""
+    monkeypatch.setattr(teachers_repo, "get_teacher", lambda sub: _teacher("COMP1"))
+
+    balances = iter([5, 0])  # sufficient before generating, drained by the time we'd commit
+    monkeypatch.setattr(
+        companies_repo, "get_company", lambda cid: store.Stored(_company(next(balances)), 1)
+    )
+    monkeypatch.setattr(test_service, "get_mcq_generator", lambda: _StubGenerator())
+
+    def _fail(*args, **kwargs):
+        raise AssertionError("must not create a test once the recheck finds zero credits")
+
+    monkeypatch.setattr(tests_repo, "create_test_and_spend_credit", _fail)
+
+    with pytest.raises(InsufficientCreditsError):
+        test_service.generate_test("dev-alice", _generate_payload())
+
+
+def test_generate_test_without_a_company_raises_conflict(monkeypatch):
+    monkeypatch.setattr(teachers_repo, "get_teacher", lambda sub: _teacher(None))
+
+    with pytest.raises(ConflictError):
+        test_service.generate_test("dev-alice", _generate_payload())
