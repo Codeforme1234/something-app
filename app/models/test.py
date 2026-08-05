@@ -24,7 +24,8 @@ class Test(BaseModel):
     status: TestStatus
     deadline: datetime | None = None
     question_count: int = 0
-    # Maintained by a later phase (students + invites); always 0 in Phase 1.
+    # Kept in sync by app.services.student_service.add_students whenever new
+    # student sessions are created.
     student_count: int = 0
     created_at: datetime
     published_at: datetime | None = None
