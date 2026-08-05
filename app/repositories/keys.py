@@ -1,12 +1,13 @@
 """Every PK/SK pattern in the single table. No key strings anywhere else.
 
 Layout (PK + SK only, no GSIs):
-  TEACHER#<sub>   / PROFILE               teacher profile
-  TEACHER#<sub>   / TEST#<testUlid>       test meta (teacher partition -> listing + ownership)
-  TEST#<testId>   / Q#<001>               question (zero-padded order)
-  TEST#<testId>   / SESSION#<sessionId>   student session/invitation
-  TEST#<testId>   / SUB#<sessionId>       submission
-  TOKEN#<token>   / LOOKUP                student-link token -> {testId, sessionId, teacherSub}
+  TEACHER#<sub>    / PROFILE               admin profile (company_id links to its company)
+  COMPANY#<compId> / PROFILE               company profile (credit_balance lives here)
+  TEACHER#<sub>    / TEST#<testUlid>       test meta (teacher partition -> listing + ownership)
+  TEST#<testId>    / Q#<001>               question (zero-padded order)
+  TEST#<testId>    / SESSION#<sessionId>   student session/invitation
+  TEST#<testId>    / SUB#<sessionId>       submission
+  TOKEN#<token>    / LOOKUP                student-link token -> {testId, sessionId, teacherSub}
 """
 
 PROFILE_SK = "PROFILE"
@@ -20,6 +21,10 @@ SUBMISSION_SK_PREFIX = "SUB#"
 
 def teacher_pk(sub: str) -> str:
     return f"TEACHER#{sub}"
+
+
+def company_pk(company_id: str) -> str:
+    return f"COMPANY#{company_id}"
 
 
 def test_sk(test_id: str) -> str:

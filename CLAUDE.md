@@ -33,6 +33,20 @@ Protocol + a real and a fake implementation, chosen once at startup from
 `Settings`. Fake modules are lazy-imported so production never loads them.
 `Settings` refuses to boot with `APP_ENV=prod` plus any fake mode.
 
+**7. No `Scan`.** Every access pattern is a `GetItem`, a `Query` with a key
+condition, or a `TransactWriteItems` — see `app/repositories/store.py`. If a
+new feature seems to need a Scan, the key design is wrong; redesign the key,
+don't reach for Scan.
+
+**8. Multi-tenant: companies hold credits, not admins.** Every admin
+(`Teacher`) belongs to a `Company` (`teacher.company_id`), provisioned
+automatically on that admin's first `/me` call — see
+`teachers_repo.upsert_teacher`. Creating a test spends one credit from the
+*company's* balance via `tests_repo.create_test_and_spend_credit` (an atomic
+transaction, same shape as `submissions_repo.create_submission_and_complete_session`).
+Test/company ownership is still enforced by key (rule 3) — `company_id` on a
+`Test` is denormalized for reporting only, never for access control.
+
 ## Layout
 
 ```

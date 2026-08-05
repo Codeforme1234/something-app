@@ -5,9 +5,11 @@ keys.py); questions live in the test's own partition. Both facts are baked
 into the functions below rather than left for callers to get right.
 """
 
+from app.models.company import Company
 from app.models.question import Question
 from app.models.test import Test
 from app.repositories import keys, store
+from app.repositories.companies_repo import COMPANY_ENTITY
 
 TEST_ENTITY = "TEST"
 QUESTION_ENTITY = "QUESTION"
@@ -15,6 +17,24 @@ QUESTION_ENTITY = "QUESTION"
 
 def create_test(test: Test) -> None:
     store.put_new(keys.teacher_pk(test.teacher_sub), keys.test_sk(test.test_id), TEST_ENTITY, test)
+
+
+def create_test_and_spend_credit(test: Test, company: Company, expected_company_version: int) -> int:
+    """Create the test and debit one credit from its company in a single
+    transaction -- both writes land or neither does, so a crash between them
+    can never create a free test or spend a credit with nothing to show for
+    it. Mirrors submissions_repo.create_submission_and_complete_session."""
+    return store.transact_put_new_and_update(
+        new_pk=keys.teacher_pk(test.teacher_sub),
+        new_sk=keys.test_sk(test.test_id),
+        new_entity_type=TEST_ENTITY,
+        new_model=test,
+        update_pk=keys.company_pk(company.company_id),
+        update_sk=keys.PROFILE_SK,
+        update_entity_type=COMPANY_ENTITY,
+        update_model=company,
+        update_expected_version=expected_company_version,
+    )
 
 
 def get_test(teacher_sub: str, test_id: str) -> store.Stored[Test] | None:
