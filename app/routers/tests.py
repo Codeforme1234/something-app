@@ -4,6 +4,8 @@ from app.auth.dependencies import get_current_teacher
 from app.auth.protocol import TeacherClaims
 from app.schemas.tests import (
     CreateTestRequest,
+    GenerateQuestionsRequest,
+    GenerateQuestionsResponse,
     PutQuestionsRequest,
     TestDetail,
     TestSummary,
@@ -52,3 +54,12 @@ def put_questions(
     claims: TeacherClaims = Depends(get_current_teacher),
 ) -> TestDetail:
     return test_service.replace_questions(claims.sub, test_id, payload)
+
+
+@router.post("/{test_id}/generate-questions", response_model=GenerateQuestionsResponse)
+def generate_questions(
+    test_id: str,
+    payload: GenerateQuestionsRequest,
+    claims: TeacherClaims = Depends(get_current_teacher),
+) -> GenerateQuestionsResponse:
+    return test_service.generate_questions(claims.sub, test_id, payload)

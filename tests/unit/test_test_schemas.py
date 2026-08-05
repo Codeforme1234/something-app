@@ -5,7 +5,13 @@ not just UX guardrails — see app/schemas/tests.py."""
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.tests import CreateTestRequest, PutQuestionsRequest, QuestionInput, UpdateTestRequest
+from app.schemas.tests import (
+    CreateTestRequest,
+    GenerateQuestionsRequest,
+    PutQuestionsRequest,
+    QuestionInput,
+    UpdateTestRequest,
+)
 
 
 def _options() -> list[str]:
@@ -94,3 +100,29 @@ def test_put_questions_accepts_exactly_100():
         QuestionInput(stem=f"Q{i}", options=_options(), correct_index=0) for i in range(100)
     ]
     PutQuestionsRequest(questions=questions)
+
+
+def test_generate_questions_topic_must_be_nonblank_after_strip():
+    with pytest.raises(ValidationError):
+        GenerateQuestionsRequest(topic="   ", count=5, difficulty="medium")
+
+
+def test_generate_questions_topic_is_stripped():
+    req = GenerateQuestionsRequest(topic="  Photosynthesis  ", count=5, difficulty="medium")
+    assert req.topic == "Photosynthesis"
+
+
+def test_generate_questions_topic_max_length_enforced():
+    with pytest.raises(ValidationError):
+        GenerateQuestionsRequest(topic="x" * 301, count=5, difficulty="medium")
+
+
+@pytest.mark.parametrize("count", [0, 21])
+def test_generate_questions_count_out_of_range_rejected(count):
+    with pytest.raises(ValidationError):
+        GenerateQuestionsRequest(topic="Topic", count=count, difficulty="medium")
+
+
+@pytest.mark.parametrize("count", [1, 20])
+def test_generate_questions_count_boundary_accepted(count):
+    GenerateQuestionsRequest(topic="Topic", count=count, difficulty="medium")
