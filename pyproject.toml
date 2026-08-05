@@ -22,6 +22,12 @@ email-validator = "^2.2.0"
 pytest = "^8.3.0"
 httpx = "^0.27.0"
 
+[tool.pytest.ini_options]
+# Domain classes are named Test/TestStatus/TestSummary/TestDetail per the
+# spec; the suite has no test *classes* (only test_* functions), so silence
+# pytest's harmless "cannot collect" warning about them instead of renaming.
+filterwarnings = ["ignore::pytest.PytestCollectionWarning"]
+
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
