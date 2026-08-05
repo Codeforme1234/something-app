@@ -12,13 +12,15 @@ conditions on business fields.
 from typing import TypeVar
 
 from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.types import TypeSerializer
 from botocore.exceptions import ClientError
 from pydantic import BaseModel
 
 from app.core.exceptions import ConflictError
-from app.repositories.table import get_table
+from app.repositories.table import get_client, get_table
 
 M = TypeVar("M", bound=BaseModel)
+_serializer = TypeSerializer()
 
 
 class Stored[T: BaseModel]:
@@ -73,6 +75,63 @@ def put_versioned(
             raise ConflictError("item was modified concurrently") from e
         raise
     return new_version
+
+
+def transact_put_new_and_update(
+    *,
+    new_pk: str,
+    new_sk: str,
+    new_entity_type: str,
+    new_model: BaseModel,
+    update_pk: str,
+    update_sk: str,
+    update_entity_type: str,
+    update_model: BaseModel,
+    update_expected_version: int,
+) -> int:
+    """Atomically create a brand-new item and update an existing versioned
+    item in a single all-or-nothing transaction (e.g. a submission plus the
+    session it completes). Both writes land or neither does.
+
+    The resource-level Table object has no transaction method, so this goes
+    through the low-level client (`app.repositories.table.get_client`) with
+    items hand-serialized to DynamoDB's AttributeValue wire format. Returns
+    the new version of the updated item. Raises ConflictError if either
+    condition fails.
+    """
+    new_version = update_expected_version + 1
+    table_name = get_table().name
+    try:
+        get_client().transact_write_items(
+            TransactItems=[
+                {
+                    "Put": {
+                        "TableName": table_name,
+                        "Item": _to_low_level(_encode(new_pk, new_sk, new_entity_type, new_model, 1)),
+                        "ConditionExpression": "attribute_not_exists(PK)",
+                    }
+                },
+                {
+                    "Put": {
+                        "TableName": table_name,
+                        "Item": _to_low_level(
+                            _encode(update_pk, update_sk, update_entity_type, update_model, new_version)
+                        ),
+                        "ConditionExpression": "version = :v",
+                        "ExpressionAttributeValues": {":v": _serializer.serialize(update_expected_version)},
+                    }
+                },
+            ]
+        )
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "TransactionCanceledException":
+            raise ConflictError("already submitted") from e
+        raise
+    return new_version
+
+
+def _to_low_level(item: dict) -> dict:
+    return {k: _serializer.serialize(v) for k, v in item.items()}
 
 
 def get(pk: str, sk: str, model_cls: type[M]) -> Stored[M] | None:

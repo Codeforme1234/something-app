@@ -35,5 +35,11 @@ def get_session(test_id: str, session_id: str) -> store.Stored[StudentSession] |
     return store.get(keys.test_pk(test_id), keys.session_sk(session_id), StudentSession)
 
 
+def update_session(session: StudentSession, expected_version: int) -> int:
+    return store.put_versioned(
+        keys.test_pk(session.test_id), keys.session_sk(session.session_id), SESSION_ENTITY, session, expected_version
+    )
+
+
 def get_token_lookup(token: str) -> store.Stored[TokenLookup] | None:
     return store.get(keys.token_pk(token), keys.LOOKUP_SK, TokenLookup)
