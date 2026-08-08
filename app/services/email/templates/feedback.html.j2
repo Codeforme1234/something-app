@@ -1,0 +1,86 @@
+{% extends "base.html.j2" %}
+
+{% block preheader %}Your score: {{ score }}% on {{ test_title }}{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 20px 0; font-size:16px; line-height:24px;">Hi {{ student_name }},</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px 0;">
+  <tr>
+    <td align="center" style="padding:8px 0;">
+      <div style="font-size:44px; line-height:52px; font-weight:700; color:#6750a4;">{{ score }}%</div>
+      <div style="font-size:14px; color:#79747e;">{{ correct_count }} of {{ total_questions }} correct on {{ test_title }}</div>
+    </td>
+  </tr>
+</table>
+
+<p style="margin:0 0 24px 0; font-size:15px; line-height:22px; color:#1c1b1f;">{{ content.summary }}</p>
+
+{% if content.topic_breakdown %}
+<p style="margin:0 0 8px 0; font-size:14px; font-weight:700; color:#1c1b1f;">Topic breakdown</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px 0;">
+  {% for row in topic_rows %}
+  <tr>
+    <td style="padding:6px 0; font-size:14px; color:#1c1b1f; border-bottom:1px solid #f0ebf4;">{{ row.topic }}</td>
+    <td align="right" style="padding:6px 0; font-size:14px; font-weight:700; color:{{ row.color }}; border-bottom:1px solid #f0ebf4;">{{ row.correct }}/{{ row.total }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+{% if content.strengths %}
+<p style="margin:0 0 8px 0; font-size:14px; font-weight:700; color:#1c1b1f;">Strengths</p>
+<ul style="margin:0 0 24px 0; padding-left:20px; font-size:14px; line-height:22px; color:#1c1b1f;">
+  {% for item in content.strengths %}
+  <li>{{ item }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% if content.improvement_areas %}
+<p style="margin:0 0 8px 0; font-size:14px; font-weight:700; color:#1c1b1f;">Improvement areas</p>
+{% for area in content.improvement_areas %}
+<div style="margin:0 0 16px 0; font-size:14px; line-height:22px; color:#1c1b1f;">
+  <div style="font-weight:700; margin:0 0 2px 0;">{{ area.topic }}</div>
+  <div style="margin:0 0 4px 0;">{{ area.diagnosis }}</div>
+  <div><strong>Try this:</strong> {{ area.action }}</div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if content.study_plan %}
+<p style="margin:0 0 8px 0; font-size:14px; font-weight:700; color:#1c1b1f;">Study plan</p>
+<ol style="margin:0 0 24px 0; padding-left:20px; font-size:14px; line-height:22px; color:#1c1b1f;">
+  {% for item in content.study_plan %}
+  <li>{{ item }}</li>
+  {% endfor %}
+</ol>
+{% endif %}
+
+{% if not content.improvement_areas and not content.study_plan and not content.topic_breakdown %}
+{% if content.areas_to_improve %}
+<p style="margin:0 0 8px 0; font-size:14px; font-weight:700; color:#1c1b1f;">Areas to improve</p>
+<ul style="margin:0 0 24px 0; padding-left:20px; font-size:14px; line-height:22px; color:#1c1b1f;">
+  {% for item in content.areas_to_improve %}
+  <li>{{ item }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% if content.focus_topics %}
+<p style="margin:0 0 8px 0; font-size:14px; font-weight:700; color:#1c1b1f;">Suggested focus topics</p>
+<ul style="margin:0 0 24px 0; padding-left:20px; font-size:14px; line-height:22px; color:#1c1b1f;">
+  {% for item in content.focus_topics %}
+  <li>{{ item }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endif %}
+
+{% if link %}
+<p style="margin:24px 0 0 0; font-size:14px;">
+  <a href="{{ link }}" style="color:#6750a4; text-decoration:none; font-weight:700;">View your test →</a>
+</p>
+{% endif %}
+{% endblock %}
+
+{% block footer %}Sent by your teacher via QuizDeck.{% endblock %}

@@ -1,6 +1,6 @@
-"""Integration tests against DynamoDB Local for the student attempt flow:
-token resolution, timed start, and server-side grading. Run `docker compose
-up -d` first (see CLAUDE.md); conftest.py creates the throwaway table.
+"""Integration tests for the student attempt flow: token resolution, timed
+start, and server-side grading. Backed by moto (see tests/conftest.py);
+conftest.py creates the table.
 
 Deadline-passed and time-up paths are exercised by writing an
 already-in-the-past deadline/ends_at directly through the repository layer
@@ -141,7 +141,19 @@ def test_full_happy_path_get_start_submit():
     assert len(start_body["questions"]) == 2
     for q in start_body["questions"]:
         assert "correct_index" not in q
-        assert set(q.keys()) == {"question_id", "order", "stem", "options"}
+        # An exact allowlist, not a spot check: a new field on Question must not
+        # reach a student without someone deliberately adding it here. Note
+        # image_url (the resolved URL) is present but image_key is not.
+        assert set(q.keys()) == {
+            "question_id",
+            "order",
+            "stem",
+            "options",
+            "image_url",
+            "image_alt",
+        }
+        assert q["image_url"] is None
+        assert q["image_alt"] is None
     assert start_body["ends_at"] is not None
 
     # Both questions were authored with correct_index=1: answer the first
@@ -150,7 +162,12 @@ def test_full_happy_path_get_start_submit():
     answers = {question_ids[0]: 1, question_ids[1]: 0}
     submit = client.post(f"/api/v1/take/{token}/submit", json={"answers": answers})
     assert submit.status_code == 200, submit.text
-    assert submit.json() == {"status": "submitted"}
+    assert submit.json() == {
+        "status": "submitted",
+        "score": 50,
+        "correct_count": 1,
+        "total_questions": 2,
+    }
 
     rows = client.get(f"/api/v1/tests/{test_id}/students", headers=headers).json()
     assert len(rows) == 1
@@ -163,7 +180,11 @@ def test_full_happy_path_get_start_submit():
 
     info_again = client.get(f"/api/v1/take/{token}")
     assert info_again.status_code == 200
-    assert info_again.json()["session_status"] == "completed"
+    info_again_body = info_again.json()
+    assert info_again_body["session_status"] == "completed"
+    assert info_again_body["score"] == 50
+    assert info_again_body["correct_count"] == 1
+    assert info_again_body["total_questions"] == 2
 
 
 def test_start_twice_is_idempotent_and_returns_the_same_ends_at():

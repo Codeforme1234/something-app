@@ -1,7 +1,6 @@
-"""Integration tests against DynamoDB Local for the teacher-facing results
-endpoints: derived effective_status on the roster, per-student review, and
-test analytics. Run `docker compose up -d` first (see CLAUDE.md);
-conftest.py creates the throwaway table.
+"""Integration tests for the teacher-facing results endpoints: derived
+effective_status on the roster, per-student review, and test analytics.
+Backed by moto (see tests/conftest.py); conftest.py creates the table.
 """
 
 import uuid

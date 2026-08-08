@@ -1,3 +1,6 @@
+import ssl
+
+import certifi
 import jwt
 from jwt import PyJWKClient
 
@@ -10,7 +13,15 @@ class CognitoJwtVerifier:
     def __init__(self, region: str, user_pool_id: str, client_id: str):
         self.issuer = f"https://cognito-idp.{region}.amazonaws.com/{user_pool_id}"
         self.client_id = client_id
-        self._jwks = PyJWKClient(f"{self.issuer}/.well-known/jwks.json")
+        self._jwks = PyJWKClient(
+            f"{self.issuer}/.well-known/jwks.json",
+            # PyJWKClient fetches with urllib, which trusts only the Python
+            # installation's own CA store -- empty on python.org macOS builds,
+            # where every JWKS fetch (and therefore every login) fails with an
+            # SSL error. Pin certifi's bundle, like every other HTTP client in
+            # this app already does via httpx/boto3.
+            ssl_context=ssl.create_default_context(cafile=certifi.where()),
+        )
 
     def verify(self, token: str) -> TeacherClaims:
         try:

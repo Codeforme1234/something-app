@@ -17,6 +17,7 @@ class FakeMCQGenerator:
         count: int,
         difficulty: Difficulty,
         knowledge_base: str | None = None,
+        guidelines: str | None = None,
     ) -> list[GeneratedMCQ]:
         clean_topic = topic.strip() or "the topic"
         # Visibly reflects the flag in dev so a tester can confirm an upload

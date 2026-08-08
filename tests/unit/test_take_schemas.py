@@ -36,11 +36,17 @@ def _model_classes_reachable_from(model_cls: type[BaseModel], seen: set[type] | 
     return seen
 
 
+# correct_index is rule 4. image_key is the same class of leak: it is an internal
+# storage address, and the student is only ever given the resolved image_url.
+BANNED_STUDENT_FIELDS = ("correct_index", "image_key")
+
+
 @pytest.mark.parametrize("root", [TakeInfo, TakeQuestion, StartAttemptResponse, SubmitRequest, SubmitResponse])
-def test_no_model_reachable_from_take_schemas_has_correct_index(root):
+@pytest.mark.parametrize("banned", BANNED_STUDENT_FIELDS)
+def test_no_model_reachable_from_take_schemas_leaks_a_banned_field(root, banned):
     for model_cls in _model_classes_reachable_from(root):
-        assert "correct_index" not in model_cls.model_fields, (
-            f"{model_cls.__name__} must never expose correct_index to students"
+        assert banned not in model_cls.model_fields, (
+            f"{model_cls.__name__} must never expose {banned} to students"
         )
 
 
@@ -54,9 +60,42 @@ def test_take_question_from_model_does_not_carry_correct_index():
     assert take_question.options == ["3", "4", "5", "6"]
 
 
-def test_submit_response_is_only_a_status():
-    resp = SubmitResponse()
-    assert resp.model_dump() == {"status": "submitted"}
+def test_take_question_carries_the_resolved_image_url_but_not_the_key():
+    question = Question(
+        question_id="q1",
+        order=1,
+        stem="Identify the circuit",
+        options=["3", "4", "5", "6"],
+        correct_index=1,
+        image_key="tests/T1/q/IMG.png",
+        image_alt="A series circuit",
+    )
+
+    take_question = TakeQuestion.from_model(question, "https://cdn.example/img.png")
+
+    dumped = take_question.model_dump()
+    assert dumped["image_url"] == "https://cdn.example/img.png"
+    assert dumped["image_alt"] == "A series circuit"
+    assert "image_key" not in dumped
+
+
+def test_take_question_image_fields_default_to_none_for_an_imageless_question():
+    question = Question(question_id="q1", order=1, stem="2+2?", options=["3", "4", "5", "6"], correct_index=1)
+
+    take_question = TakeQuestion.from_model(question)
+
+    assert take_question.image_url is None
+    assert take_question.image_alt is None
+
+
+def test_submit_response_carries_only_status_score_and_counts():
+    resp = SubmitResponse(score=50, correct_count=1, total_questions=2)
+    assert resp.model_dump() == {
+        "status": "submitted",
+        "score": 50,
+        "correct_count": 1,
+        "total_questions": 2,
+    }
 
 
 # --- SubmitRequest validation ------------------------------------------------

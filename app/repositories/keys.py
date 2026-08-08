@@ -7,6 +7,7 @@ Layout (PK + SK only, no GSIs):
   TEST#<testId>    / Q#<001>               question (zero-padded order)
   TEST#<testId>    / SESSION#<sessionId>   student session/invitation
   TEST#<testId>    / SUB#<sessionId>       submission
+  TEST#<testId>    / FEEDBACK#<sessionId>  LLM feedback for a completed attempt
   TOKEN#<token>    / LOOKUP                student-link token -> {testId, sessionId, teacherSub}
 """
 
@@ -17,6 +18,7 @@ TEST_SK_PREFIX = "TEST#"
 QUESTION_SK_PREFIX = "Q#"
 SESSION_SK_PREFIX = "SESSION#"
 SUBMISSION_SK_PREFIX = "SUB#"
+FEEDBACK_SK_PREFIX = "FEEDBACK#"
 
 
 def teacher_pk(sub: str) -> str:
@@ -45,6 +47,10 @@ def session_sk(session_id: str) -> str:
 
 def submission_sk(session_id: str) -> str:
     return f"{SUBMISSION_SK_PREFIX}{session_id}"
+
+
+def feedback_sk(session_id: str) -> str:
+    return f"{FEEDBACK_SK_PREFIX}{session_id}"
 
 
 def token_pk(token: str) -> str:

@@ -37,6 +37,14 @@ class UpstreamError(AppError):
     code = "upstream_error"
 
 
+class InsufficientAiCreditsError(AppError):
+    """Separate from InsufficientCreditsError so the UI can name the right pool
+    rather than string-matching a message."""
+
+    status_code = 402
+    code = "insufficient_ai_credits"
+
+
 class InsufficientCreditsError(AppError):
     status_code = 402
     code = "insufficient_credits"

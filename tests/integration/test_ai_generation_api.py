@@ -1,6 +1,6 @@
-"""Integration tests against DynamoDB Local, run with LLM_MODE=fake (the
-process-wide default -- see .env / CLAUDE.md). These never call the real
-OpenAI API; FakeMCQGenerator is deterministic and needs no key.
+"""Integration tests (moto-backed; see tests/conftest.py), run with
+LLM_MODE=fake, which tests/integration/conftest.py pins. These never call the
+real OpenAI API; FakeMCQGenerator is deterministic and needs no key.
 """
 
 import uuid
@@ -138,15 +138,27 @@ def _generate_test(headers: dict, **overrides) -> httpx.Response:
     return client.post("/api/v1/tests/generate", json=payload, headers=headers)
 
 
-def test_generate_test_creates_a_draft_with_ai_authored_questions():
+def test_generate_test_accepts_immediately_and_finishes_in_the_background():
+    """202 with no questions, then a draft with questions once the background
+    task has run. TestClient runs background tasks before returning, so by the
+    time the POST call completes the run has already finished."""
     headers = _headers()
     before = client.get("/api/v1/me", headers=headers).json()["credit_balance"]
 
     resp = _generate_test(headers, topic="Photosynthesis", count=3, difficulty="medium")
-    assert resp.status_code == 201, resp.text
-    test = resp.json()
+    assert resp.status_code == 202, resp.text
+    accepted = resp.json()
 
-    assert test["title"] == "Photosynthesis"
+    assert accepted["title"] == "Photosynthesis"
+    # The response describes the run, not its result: no questions exist yet.
+    assert "questions" not in accepted
+
+    # The credit is spent at accept time, not on completion -- the teacher asked
+    # for the run, so the balance moves when they click.
+    after = client.get("/api/v1/me", headers=headers).json()["credit_balance"]
+    assert after == before - 1
+
+    test = client.get(f"/api/v1/tests/{accepted['test_id']}", headers=headers).json()
     assert test["status"] == "draft"
     assert test["question_count"] == 3
     assert len(test["questions"]) == 3
@@ -154,13 +166,16 @@ def test_generate_test_creates_a_draft_with_ai_authored_questions():
         assert "photosynthesis" in q["stem"].lower()
         assert "correct_index" in q  # teacher-facing detail, unlike the student view
 
-    after = client.get("/api/v1/me", headers=headers).json()["credit_balance"]
-    assert after == before - 1
 
-    # It's a normal draft afterwards -- reachable through the ordinary get/list.
-    get_resp = client.get(f"/api/v1/tests/{test['test_id']}", headers=headers)
-    assert get_resp.status_code == 200, get_resp.text
-    assert get_resp.json()["question_count"] == 3
+def test_a_generating_test_appears_on_the_dashboard_before_it_finishes():
+    """The card has to exist the moment the teacher clicks, which is the whole
+    reason the status is stored rather than held in memory."""
+    headers = _headers()
+    resp = _generate_test(headers, topic="Optics", count=1)
+    test_id = resp.json()["test_id"]
+
+    listed = {t["test_id"]: t for t in client.get("/api/v1/tests", headers=headers).json()}
+    assert test_id in listed
 
 
 def test_generate_test_with_knowledge_base_reaches_the_generator():
@@ -168,8 +183,9 @@ def test_generate_test_with_knowledge_base_reaches_the_generator():
     resp = _generate_test(
         headers, count=1, knowledge_base="Mitochondria are the powerhouse of the cell."
     )
-    assert resp.status_code == 201, resp.text
-    assert "uploaded material" in resp.json()["questions"][0]["stem"]
+    assert resp.status_code == 202, resp.text
+    test = client.get(f"/api/v1/tests/{resp.json()['test_id']}", headers=headers).json()
+    assert "uploaded material" in test["questions"][0]["stem"]
 
 
 def test_generate_test_with_zero_credits_is_rejected_and_creates_nothing():
@@ -193,5 +209,5 @@ def test_generate_test_topic_over_200_chars_is_truncated_for_the_title():
     assert len(long_topic) > 200
 
     resp = _generate_test(headers, topic=long_topic, count=1)
-    assert resp.status_code == 201, resp.text
+    assert resp.status_code == 202, resp.text
     assert resp.json()["title"] == long_topic[:200]

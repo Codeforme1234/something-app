@@ -13,3 +13,12 @@ class Company(BaseModel):
     name: str
     credit_balance: int
     created_at: datetime
+    # Separate pool for AI generation, on top of the test-creation credit above:
+    # an AI run costs real money, so it is metered independently.
+    #
+    # `None` means "never granted" and is distinct from 0, which means "granted
+    # and spent". teachers_repo backfills a None on the next /me call; without
+    # the sentinel that backfill would keep refilling a drained balance.
+    # Optional at all because companies provisioned before AI runs existed must
+    # still deserialize -- same reason as Teacher.company_id.
+    ai_credit_balance: int | None = None

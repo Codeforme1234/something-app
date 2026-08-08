@@ -25,6 +25,11 @@ class TakeInfo(BaseModel):
     student_name: str
     ends_at: datetime | None  # set once the session has been started
     server_now: datetime
+    # Populated only once session_status == completed -- the score and
+    # counts, never which questions were right (see SubmitResponse).
+    score: int | None = None
+    correct_count: int | None = None
+    total_questions: int | None = None
 
 
 class TakeQuestion(BaseModel):
@@ -32,14 +37,24 @@ class TakeQuestion(BaseModel):
     order: int
     stem: str
     options: list[str]
+    # A resolved URL only -- never `image_key`. The raw storage key is an
+    # internal address the student has no use for, and withholding it keeps the
+    # student contract as narrow as it is for `correct_index`.
+    image_url: str | None = None
+    image_alt: str | None = None
 
     @classmethod
-    def from_model(cls, question: Question) -> "TakeQuestion":
+    def from_model(cls, question: Question, image_url: str | None = None) -> "TakeQuestion":
+        # Fields are listed explicitly rather than splatting model_dump(): that
+        # explicitness is what stops a new field on Question (like image_key)
+        # reaching students by accident.
         return cls(
             question_id=question.question_id,
             order=question.order,
             stem=question.stem,
             options=question.options,
+            image_url=image_url,
+            image_alt=question.image_alt,
         )
 
 
@@ -67,6 +82,11 @@ class SubmitRequest(BaseModel):
 
 
 class SubmitResponse(BaseModel):
-    """No score, no correct answers -- just an acknowledgement."""
+    """The student's own result: their score and counts, and nothing about
+    *which* questions were right -- never correct_index, never per-question
+    correctness."""
 
     status: Literal["submitted"] = "submitted"
+    score: int
+    correct_count: int
+    total_questions: int

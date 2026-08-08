@@ -1,6 +1,5 @@
-"""Integration tests against DynamoDB Local for the students/publish/invite
-flow. Run `docker compose up -d` first (see CLAUDE.md); conftest.py creates
-the throwaway table.
+"""Integration tests for the students/publish/invite flow. Backed by moto
+(see tests/conftest.py); conftest.py creates the table.
 """
 
 import uuid

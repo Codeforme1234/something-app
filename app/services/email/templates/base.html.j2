@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>QuizDeck</title>
+  </head>
+  <body style="margin:0; padding:0; background-color:#f4f1f8;">
+    <!--
+      Hidden preheader: the first thing a mail client's inbox-preview text
+      picks up, so it must come before any visible content. max-height:0 and
+      overflow:hidden keep it out of the rendered body in every client that
+      doesn't understand the trick (it just sees an empty 1px block).
+    -->
+    <div style="display:none; font-size:1px; line-height:1px; color:#f4f1f8; max-height:0; max-width:0; opacity:0; overflow:hidden; mso-hide:all;">
+      {% block preheader %}{% endblock %}
+    </div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f1f8;">
+      <tr>
+        <td align="center" style="padding:32px 16px;">
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%; max-width:600px;">
+            <tr>
+              <td style="background-color:#ffffff; border:1px solid #e7e0ec; border-radius:12px; padding:32px; font-family:-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#1c1b1f;">
+                <div style="font-size:20px; line-height:28px; font-weight:700; margin:0 0 24px 0;">
+                  <span style="color:#1c1b1f;">Quiz</span><span style="color:#6750a4;">Deck</span>
+                </div>
+                {% block content %}{% endblock %}
+              </td>
+            </tr>
+          </table>
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%; max-width:600px;">
+            <tr>
+              <td align="center" style="padding:16px 32px 0 32px; font-family:-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size:12px; line-height:18px; color:#79747e;">
+                {% block footer %}{% endblock %}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

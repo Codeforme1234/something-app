@@ -15,7 +15,7 @@ from app.models.test import Difficulty, Test, TestStatus
 from app.models.token import TokenLookup
 from app.repositories import sessions_repo, store, submissions_repo, tests_repo
 from app.schemas.take import SubmitRequest
-from app.services import attempt_service
+from app.services import attempt_service, feedback_job
 
 TEACHER_SUB = "dev-alice"
 TEST_ID = "01TESTID"
@@ -81,8 +81,15 @@ def test_unknown_token_raises_not_found(monkeypatch):
         attempt_service.get_info("nope")
 
 
-def test_draft_test_token_raises_not_found(monkeypatch):
-    _patch(monkeypatch, test=_test(status=TestStatus.draft, deadline=None), session=_session())
+@pytest.mark.parametrize(
+    "status",
+    [TestStatus.draft, TestStatus.generating, TestStatus.generation_failed],
+)
+def test_an_unpublished_test_token_raises_not_found(monkeypatch, status):
+    """The guard is `!= published`, so every non-published status is excluded by
+    construction -- including the two AI-run statuses, which must never be
+    reachable by a student even if a link somehow leaked."""
+    _patch(monkeypatch, test=_test(status=status, deadline=None), session=_session())
 
     with pytest.raises(NotFoundError):
         attempt_service.get_info(TOKEN)
@@ -263,11 +270,25 @@ def test_submit_within_grace_grades_and_writes_atomically(monkeypatch):
         "create_submission_and_complete_session",
         lambda sub, sess, v: calls.append((sub, sess, v)) or (v + 1),
     )
+    # feedback_job.start touches its own repo (feedback_repo), which this
+    # module's docstring promises never happens against real DynamoDB --
+    # stub it out like every other repository call here.
+    feedback_starts = []
+    monkeypatch.setattr(
+        feedback_job, "start", lambda test_id, session_id: feedback_starts.append((test_id, session_id))
+    )
 
     # q1's correct_index is 1, q2's is 1 -- answer q1 right, q2 wrong.
-    resp = attempt_service.submit_attempt(TOKEN, SubmitRequest(answers={"q1": 1, "q2": 0}))
+    outcome = attempt_service.submit_attempt(TOKEN, SubmitRequest(answers={"q1": 1, "q2": 0}))
 
-    assert resp.status == "submitted"
+    assert outcome.response.status == "submitted"
+    assert outcome.response.score == 50
+    assert outcome.response.correct_count == 1
+    assert outcome.response.total_questions == 2
+    assert outcome.teacher_sub == TEACHER_SUB
+    assert outcome.test_id == TEST_ID
+    assert outcome.session_id == SESSION_ID
+    assert feedback_starts == [(TEST_ID, SESSION_ID)]
     assert len(calls) == 1
     submission, completed_session, version = calls[0]
     assert version == 3

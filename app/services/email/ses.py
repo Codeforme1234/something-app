@@ -11,7 +11,16 @@ class SesEmailSender:
         settings = get_settings()
         assert settings.ses_from_address, "EMAIL_MODE=ses requires SES_FROM_ADDRESS"
         self._from_address = settings.ses_from_address
-        self._client = boto3.client("sesv2", region_name=settings.aws_region)
+        # profile_name=None is boto3's normal credential chain, which is what a
+        # deployment uses; SES_PROFILE is the local-dev escape hatch (see
+        # Settings.ses_profile). SES_REGION falls back to AWS_REGION.
+        # `or None` so an explicitly blanked SES_PROFILE means "the normal
+        # chain", not a lookup for a profile literally named "" -- which
+        # botocore answers with ProfileNotFound. Matches DYNAMO_PROFILE/S3_PROFILE.
+        session = boto3.Session(profile_name=settings.ses_profile or None)
+        self._client = session.client(
+            "sesv2", region_name=settings.ses_region or settings.aws_region
+        )
 
     def send(self, to: str, subject: str, html: str, text: str) -> None:
         self._client.send_email(
