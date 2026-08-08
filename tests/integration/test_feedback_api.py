@@ -223,6 +223,10 @@ def test_email_feedback_sends_and_records_email_sent_at():
     # count in "topic — correct/total" shape.
     assert "Try this:" in newest["text"]
     assert "— 1/1" in newest["text"] or "— 0/1" in newest["text"]
+    # feedback_service.email_feedback always builds the student's take-page
+    # link, the same way student_service builds an invite link.
+    assert "View your test:" in newest["text"]
+    assert "/t/" in newest["text"]
 
     detail = client.get(f"/api/v1/tests/{test_id}/students/{session_id}", headers=headers).json()
     assert detail["feedback"]["email_sent_at"] is not None
