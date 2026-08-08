@@ -142,6 +142,10 @@ def test_publish_sends_invitations_to_outbox_with_student_links():
     assert len(messages) == 2
     recipients = {m["to"] for m in messages}
     assert recipients == {"ada@example.com", "bob@example.com"}
+
+    from app.services.email.invitations import format_deadline
+
+    expected_deadline_text = format_deadline(datetime.fromisoformat(summary["deadline"]))
     for message in messages:
         assert message["student_link"] is not None
         assert "/t/" in message["student_link"]
@@ -149,6 +153,11 @@ def test_publish_sends_invitations_to_outbox_with_student_links():
         assert message["html"]
         assert message["text"]
         assert message["sent_at"]
+        # Human-readable deadline (not the raw ISO string), plus duration and
+        # question count -- the payload created a 1800s/1-question test.
+        assert expected_deadline_text in message["text"]
+        assert "30 minutes" in message["text"]
+        assert "1 question" in message["text"]
 
     # GET /students still reflects the roster (still "invited" -- Phase 3
     # flips this to "started"/"completed").
