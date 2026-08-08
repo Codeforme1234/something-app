@@ -10,6 +10,7 @@ app.core.clock.now(); nothing here trusts a client-supplied timestamp.
 """
 
 from datetime import timedelta
+from typing import NamedTuple
 
 from app.core.clock import now
 from app.core.config import get_settings
@@ -25,9 +26,23 @@ from app.schemas.take import (
     TakeInfo,
     TakeQuestion,
 )
+from app.services import feedback_job
 from app.services.grading import grade
+from app.services.storage import question_image_url
 
 _NO_SUCH_LINK = "this test link is not valid"
+
+
+class SubmitOutcome(NamedTuple):
+    """What submit_attempt hands back to the router: the response body for
+    the student, plus everything app.routers.take needs to enqueue the
+    feedback background task (app.services.feedback_job.run) without the
+    router having to know how to re-derive a test's owning teacher_sub."""
+
+    response: SubmitResponse
+    teacher_sub: str
+    test_id: str
+    session_id: str
 
 
 class _Resolved:
@@ -73,6 +88,14 @@ def get_info(token: str) -> TakeInfo:
     ):
         raise GoneError("this test's deadline has passed")
 
+    # Score/counts are only meaningful once the attempt is graded -- a
+    # session that hasn't submitted yet has none of the three.
+    score = correct_count = total_questions = None
+    if session.status == SessionStatus.completed:
+        score = session.score
+        correct_count = session.correct_count
+        total_questions = session.total_questions
+
     return TakeInfo(
         test_title=test.title,
         duration_seconds=test.duration_seconds,
@@ -82,6 +105,9 @@ def get_info(token: str) -> TakeInfo:
         student_name=session.student_name,
         ends_at=session.ends_at,
         server_now=now(),
+        score=score,
+        correct_count=correct_count,
+        total_questions=total_questions,
     )
 
 
@@ -126,13 +152,13 @@ def start_attempt(token: str) -> StartAttemptResponse:
 
     questions = tests_repo.get_questions(test.test_id)
     return StartAttemptResponse(
-        questions=[TakeQuestion.from_model(q) for q in questions],
+        questions=[TakeQuestion.from_model(q, question_image_url(q.image_key)) for q in questions],
         ends_at=session.ends_at,
         server_now=now(),
     )
 
 
-def submit_attempt(token: str, payload: SubmitRequest) -> SubmitResponse:
+def submit_attempt(token: str, payload: SubmitRequest) -> SubmitOutcome:
     resolved = _resolve(token)
     test, session, version = resolved.test, resolved.session, resolved.session_version
 
@@ -171,4 +197,14 @@ def submit_attempt(token: str, payload: SubmitRequest) -> SubmitResponse:
     # submit won the race) propagates as-is: "already submitted".
     submissions_repo.create_submission_and_complete_session(submission, completed_session, version)
 
-    return SubmitResponse()
+    # Synchronous and never-raising (see feedback_job.start's docstring): the
+    # submission above has already landed, so a hiccup here must not turn
+    # into a 500 for a student who has, in fact, successfully submitted.
+    feedback_job.start(test.test_id, session.session_id)
+
+    return SubmitOutcome(
+        response=SubmitResponse(score=score, correct_count=correct_count, total_questions=total),
+        teacher_sub=test.teacher_sub,
+        test_id=test.test_id,
+        session_id=session.session_id,
+    )

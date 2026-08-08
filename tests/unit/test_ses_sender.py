@@ -21,10 +21,16 @@ def _settings(**overrides) -> Settings:
     return Settings(_env_file=None, **defaults)
 
 
+def _mock_session(monkeypatch) -> MagicMock:
+    """Patches boto3.Session and returns the mock Session *class*, so tests can
+    assert on both the session (profile) and the client (service, region)."""
+    mock_session_cls = MagicMock()
+    monkeypatch.setattr(ses_module.boto3, "Session", mock_session_cls)
+    return mock_session_cls
+
+
 def _mock_boto_client(monkeypatch) -> MagicMock:
-    mock_client = MagicMock()
-    monkeypatch.setattr(ses_module.boto3, "client", MagicMock(return_value=mock_client))
-    return mock_client
+    return _mock_session(monkeypatch).return_value.client.return_value
 
 
 def test_send_builds_the_sesv2_send_email_payload(monkeypatch):
@@ -55,12 +61,47 @@ def test_send_builds_the_sesv2_send_email_payload(monkeypatch):
 
 def test_client_is_sesv2_in_the_configured_region(monkeypatch):
     monkeypatch.setattr(ses_module, "get_settings", lambda: _settings(aws_region="eu-west-1"))
-    mock_boto_client = MagicMock(return_value=MagicMock())
-    monkeypatch.setattr(ses_module.boto3, "client", mock_boto_client)
+    mock_session_cls = _mock_session(monkeypatch)
 
     SesEmailSender()
 
-    mock_boto_client.assert_called_once_with("sesv2", region_name="eu-west-1")
+    mock_session_cls.return_value.client.assert_called_once_with(
+        "sesv2", region_name="eu-west-1"
+    )
+
+
+def test_ses_region_overrides_aws_region(monkeypatch):
+    # The verified identity does not have to live in the table's region.
+    monkeypatch.setattr(
+        ses_module,
+        "get_settings",
+        lambda: _settings(aws_region="us-east-1", ses_region="ap-south-1"),
+    )
+    mock_session_cls = _mock_session(monkeypatch)
+
+    SesEmailSender()
+
+    mock_session_cls.return_value.client.assert_called_once_with(
+        "sesv2", region_name="ap-south-1"
+    )
+
+
+def test_no_profile_configured_uses_the_default_credential_chain(monkeypatch):
+    monkeypatch.setattr(ses_module, "get_settings", lambda: _settings())
+    mock_session_cls = _mock_session(monkeypatch)
+
+    SesEmailSender()
+
+    mock_session_cls.assert_called_once_with(profile_name=None)
+
+
+def test_ses_profile_selects_that_named_profile(monkeypatch):
+    monkeypatch.setattr(ses_module, "get_settings", lambda: _settings(ses_profile="quizdeck"))
+    mock_session_cls = _mock_session(monkeypatch)
+
+    SesEmailSender()
+
+    mock_session_cls.assert_called_once_with(profile_name="quizdeck")
 
 
 def test_from_address_comes_from_settings_not_the_caller(monkeypatch):

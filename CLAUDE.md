@@ -84,9 +84,24 @@ exactly, so don't add camelCase aliases.
 ## Running
 
 ```bash
-docker compose up -d          # DynamoDB Local on :8001 (colima is the docker runtime)
-poetry install
-poetry run python scripts/create_table.py
-poetry run uvicorn app.main:app --reload --port 8000
-poetry run pytest -q
+make dev      # uvicorn on :8000, reading .env.dev
+make test     # pytest; never touches AWS (moto sandbox in tests/conftest.py)
+make table    # create the table named by the active env file; idempotent
 ```
+
+There is **no docker and no local emulator**. DynamoDB Local, MinIO and the
+local-filesystem object store are gone; each environment owns real AWS
+resources, and the test suite intercepts boto3 in-process with moto.
+
+Two env files, selected by `QUIZDECK_ENV_FILE`, which defaults to `.env.dev`:
+
+| | `.env.dev` (default) | `.env.prod` |
+| --- | --- | --- |
+| table | `quizdeck-dev` | `quizdeck-prod` |
+| bucket | `quizdeck-media-dev` | `quizdeck-media` |
+| credentials | `quizdeck` profile in `~/.aws` | task/instance role |
+| Cognito + SES | *identical — one pool, one verified domain* | |
+
+`Settings` refuses `APP_ENV=dev` with a `*-prod` resource name, so a dev config
+cannot quietly address production data. `APP_ENV=prod` refuses the credential
+profiles, so `.env.prod` will not boot on a laptop — that is deliberate.

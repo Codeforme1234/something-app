@@ -32,7 +32,12 @@ class OpenAIMCQGenerator:
     def __init__(self, client: OpenAI | None = None, model: str | None = None):
         settings = get_settings()
         self._client = client if client is not None else get_openai_client()
-        self._model = model or settings.openai_model
+        # Settings guarantees this in LLM_MODE=openai, which is the only mode
+        # that constructs this class; the assert is for a direct instantiation
+        # in a test or script, so the failure names the missing var.
+        resolved = model or settings.openai_model
+        assert resolved, "LLM_MODE=openai requires OPENAI_MODEL"
+        self._model = resolved
 
     def generate(
         self,
@@ -40,8 +45,11 @@ class OpenAIMCQGenerator:
         count: int,
         difficulty: Difficulty,
         knowledge_base: str | None = None,
+        guidelines: str | None = None,
     ) -> list[GeneratedMCQ]:
-        system_prompt, user_prompt = render_mcq_prompt(topic, count, difficulty, knowledge_base)
+        system_prompt, user_prompt = render_mcq_prompt(
+            topic, count, difficulty, knowledge_base, guidelines
+        )
 
         try:
             return self._attempt(system_prompt, user_prompt, count)

@@ -18,8 +18,15 @@ def test_prefixes_do_not_collide_within_the_test_partition():
         keys.QUESTION_SK_PREFIX,
         keys.SESSION_SK_PREFIX,
         keys.SUBMISSION_SK_PREFIX,
+        keys.FEEDBACK_SK_PREFIX,
     ]
     for a in prefixes:
         for b in prefixes:
             if a is not b:
                 assert not a.startswith(b)
+
+
+def test_feedback_sk_is_shaped_like_the_other_test_partition_keys():
+    # Same partition as the submission it is about (TEST#<test_id>), keyed by
+    # session_id the same way submission_sk is.
+    assert keys.feedback_sk("01SESSION") == "FEEDBACK#01SESSION"

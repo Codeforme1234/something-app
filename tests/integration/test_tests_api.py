@@ -1,5 +1,5 @@
-"""Integration tests against DynamoDB Local. Run `docker compose up -d`
-first (see CLAUDE.md); tests/integration/conftest.py creates the table.
+"""Integration tests, backed by moto (see tests/conftest.py) -- no docker,
+no AWS account, no network. conftest.py creates the table and bucket.
 
 Each test uses a freshly-generated teacher token so tests don't see each
 other's data even though they share one on-disk table across runs.

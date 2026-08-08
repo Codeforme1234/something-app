@@ -11,21 +11,35 @@ login) · SES · OpenAI · Poetry
 
 ## Local setup
 
-Everything runs against mocks — no AWS account or OpenAI key needed.
+Auth and the LLM still run against mocks. **Storage does not**: there is no
+DynamoDB Local, no MinIO and no local-filesystem object store, so you need AWS
+credentials for the dev table and bucket. See [docs/aws-setup.md](docs/aws-setup.md).
 
 ```bash
-docker compose up -d                          # DynamoDB Local on :8001
 poetry install
-cp .env.example .env
-poetry run python scripts/create_table.py
-poetry run uvicorn app.main:app --reload --port 8000
+cp .env.example .env.dev        # then fill in TABLE_NAME, S3_BUCKET, profiles
+make table                      # idempotent; creates the table it names
+make dev                        # uvicorn on :8000
 ```
 
-Docker runs through [colima](https://github.com/abiosoft/colima) on this
-machine (`docker context` shows `colima` as active). Start it with
-`colima start` if the daemon isn't up.
+`make test` needs none of that — the suite intercepts boto3 in-process with
+moto, so it touches no AWS account and no network.
 
-A DynamoDB browser is available at http://localhost:8002.
+## Environments
+
+Two env files, chosen by `QUIZDECK_ENV_FILE`, defaulting to `.env.dev`:
+
+```bash
+make dev     # .env.dev  -> quizdeck-dev  + quizdeck-media-dev
+make prod    # .env.prod -> quizdeck-prod + quizdeck-media
+```
+
+Cognito and SES are **shared** — one user pool, one verified sending domain.
+Only the table, the bucket and the public origins differ.
+
+Two guards make the split hard to defeat: `APP_ENV=dev` is refused with a
+`*-prod` resource name, and `APP_ENV=prod` is refused with any local credential
+profile (a container has no `~/.aws`), so `.env.prod` will not boot locally.
 
 ## Modes
 
@@ -35,7 +49,10 @@ A DynamoDB browser is available at http://localhost:8002.
 | `AUTH_MODE` | `fake` \| `cognito` | fake accepts a `dev-*` bearer token |
 | `EMAIL_MODE` | `outbox` \| `ses` | outbox writes JSON to `.dev/outbox/` |
 | `LLM_MODE` | `fake` \| `openai` | fake returns canned questions |
-| `DYNAMO_ENDPOINT_URL` | url \| unset | set for DynamoDB Local, unset for AWS |
+
+Storage is deliberately absent from that table: it has no mock. A local store
+could not catch a bucket, credential or content-type mistake, and a container
+filesystem is ephemeral, so every question image would vanish on the next deploy.
 
 In dev, `GET /api/v1/dev/outbox` lists the mock emails.
 

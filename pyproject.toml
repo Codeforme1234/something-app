@@ -18,10 +18,27 @@ openai = "^1.55.0"
 python-ulid = "^3.0.0"
 email-validator = "^2.2.0"
 bleach = "^6.1.0"
+# Imported directly by app/auth/cognito.py (PyJWKClient ssl_context) --
+# declared even though httpx/openai already pull it in transitively.
+certifi = "*"
+# Required by FastAPI to parse multipart/form-data (UploadFile) on the
+# question-image upload route.
+python-multipart = "^0.0.9"
+# PDF question extraction (app/pdf/). pdfplumber is MIT and gives text plus
+# where images sit on a page; pypdfium2 is BSD-3/Apache and rasterizes.
+# PyMuPDF is deliberately NOT used despite docs/PLAN.md naming it: it is
+# AGPL-3.0 or paid, and AGPL s13's network-interaction clause is triggered by
+# exactly what a SaaS backend does.
+pdfplumber = "^0.11.0"
+pypdfium2 = "^4.30.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"
 httpx = "^0.27.0"
+# Intercepts boto3 in-process, so the suite exercises the real DynamoDB and S3
+# code paths without an emulator, a container, or an AWS account. Replaced
+# DynamoDB Local and MinIO -- see tests/conftest.py.
+moto = {extras = ["dynamodb", "s3"], version = "^5.0"}
 
 [tool.pytest.ini_options]
 # Domain classes are named Test/TestStatus/TestSummary/TestDetail per the

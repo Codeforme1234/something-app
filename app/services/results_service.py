@@ -13,9 +13,11 @@ from app.models.question import Question
 from app.models.session import SessionStatus, StudentSession
 from app.models.submission import Submission
 from app.models.test import Test
-from app.repositories import sessions_repo, store, submissions_repo, tests_repo
-from app.schemas.results import QuestionReview, QuestionStat, StudentDetail, TestAnalytics
+from app.repositories import feedback_repo, sessions_repo, store, submissions_repo, tests_repo
+from app.schemas.results import FeedbackView, QuestionReview, QuestionStat, StudentDetail, TestAnalytics
 from app.schemas.students import SessionRow
+from app.services import feedback_job
+from app.services.storage import question_image_url
 
 
 def _get_owned_test(teacher_sub: str, test_id: str) -> store.Stored[Test]:
@@ -61,6 +63,7 @@ def get_student_detail(teacher_sub: str, test_id: str, session_id: str) -> Stude
     row = SessionRow.from_model(session, effective_status(session, test, now()))
 
     review: list[QuestionReview] | None = None
+    feedback: FeedbackView | None = None
     if session.status == SessionStatus.completed:
         submission_stored = submissions_repo.get_submission(test_id, session_id)
         assert submission_stored is not None, "a completed session always has a submission"
@@ -68,7 +71,11 @@ def get_student_detail(teacher_sub: str, test_id: str, session_id: str) -> Stude
         questions = tests_repo.get_questions(test_id)
         review = [_question_review(q, submission) for q in questions]
 
-    return StudentDetail(session=row, review=review)
+        stored_feedback = feedback_repo.get_feedback(test_id, session_id)
+        model = feedback_job.presented(stored_feedback.model if stored_feedback else None, session)
+        feedback = FeedbackView.from_model(model) if model else None
+
+    return StudentDetail(session=row, review=review, feedback=feedback)
 
 
 def _question_review(question: Question, submission: Submission) -> QuestionReview:
@@ -80,6 +87,8 @@ def _question_review(question: Question, submission: Submission) -> QuestionRevi
         correct_index=question.correct_index,
         chosen_index=submission.answers.get(question.question_id),
         is_correct=submission.per_question.get(question.question_id, False),
+        image_url=question_image_url(question.image_key),
+        image_alt=question.image_alt,
     )
 
 

@@ -2,7 +2,10 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+# Every env file, not just `.env` -- `.env.dev` carries an OpenAI key and
+# `.env.prod` names production resources. The example is the only one tracked.
 .env
+.env.*
 !.env.example
 .dev/
 .pytest_cache/

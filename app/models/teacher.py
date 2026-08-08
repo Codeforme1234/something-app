@@ -15,3 +15,9 @@ class Teacher(BaseModel):
     # login rather than requiring a migration.
     company_id: str | None = None
     created_at: datetime
+    # False until the teacher has confirmed their own name and their company's
+    # on first login. Until then both are provisional values derived from the
+    # identity provider, and upsert_teacher is free to refresh them from the
+    # JWT; afterwards it must not, or every /me call would overwrite what they
+    # chose with whatever Cognito happens to return.
+    onboarded: bool = False

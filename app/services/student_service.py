@@ -46,6 +46,8 @@ def _send_invitations(test: Test, sessions: list[StudentSession]) -> None:
                 student_email=session.student_email,
                 test_title=test.title,
                 deadline=test.deadline,
+                duration_seconds=test.duration_seconds,
+                question_count=test.question_count,
                 link=link,
             )
         except Exception:
